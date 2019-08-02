@@ -3,11 +3,12 @@ package server;
 import java.io.*;
 import java.net.Socket;
 import java.util.Iterator;
+import java.util.LinkedList;
 
 class Session extends Thread {
     private Socket client;
     private BufferedReader in;
-    private BufferedWriter out;
+//    private BufferedWriter out;
     private SessionStorage sessionStorage;
     private String username = "Anonymous";
     private int clientId;
@@ -28,6 +29,10 @@ class Session extends Thread {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public boolean isReader() {
+        return isReader;
     }
 
 
@@ -72,7 +77,7 @@ class Session extends Thread {
 
     private void broadcast(ChatMessageHandler messageHandler) {
         synchronized (this) {
-            Iterator<Session> sessionIterator = sessionStorage.getSessions().iterator();
+            Iterator<Session> sessionIterator = sessionStorage.getWriterSessions().iterator();
             while (sessionIterator.hasNext()) {
                 unicast(sessionIterator, messageHandler);
             }
@@ -83,18 +88,21 @@ class Session extends Thread {
     public void run() {
         while (true) {
             try {
-                //String message = in.readLine();
                 ChatMessageHandler messageHandler = new ChatMessageHandler(in.readLine());
-                switch (messageHandler.getType()){
+                LinkedList<Session> list = new LinkedList<>();
+                list.add(this);
+                switch (messageHandler.getType()) {
                     case SND:
+                        messageHandler.setName(username);
                         broadcast(messageHandler);
                         logger.log(messageHandler.getInfoMessage());
                         break;
                     case HIST:
-                        unicast(sessionStorage.getSessions().iterator() , messageHandler);
+                        unicast(list.iterator(), messageHandler);
                         break;
                     case CHILD:
-                        messageHandler.getName();
+                        username = messageHandler.getName();
+                        unicast(list.iterator(), messageHandler);
                         break;
                     case READER:
                         isReader = true;
@@ -105,7 +113,7 @@ class Session extends Thread {
                         clientId = messageHandler.getUserId();
                         break;
                     default:
-                        unicast(sessionStorage.getSessions().iterator() , messageHandler);
+                        unicast(list.iterator(), messageHandler);
                         break;
                 }
             } catch (Exception e) {
